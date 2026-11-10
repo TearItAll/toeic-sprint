@@ -1,0 +1,12 @@
+# 個人進度備份（含作答紀錄），不要上傳
+toeic-progress-*.json
+
+# 本機工具設定
+.claude/
+
+# 部署工具產生的檔案
+node_modules/
+.netlify/
+
+# 建置輸出：由 toeic/build-site.js 產生
+toeic-site/public/
