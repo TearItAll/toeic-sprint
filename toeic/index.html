@@ -252,6 +252,10 @@ mark.ev { background: var(--hl); color: inherit; border-radius: 3px; padding: 0 
 .base-form input { font: 600 16px var(--f-mono); width: 110px; padding: 6px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink) }
 .sync-input { flex: 1; min-width: 0; max-width: 320px; font: 600 15px var(--f-mono); padding: 8px 12px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink) }
 .sync-code { font-size: 18px; letter-spacing: .04em; padding: 10px 14px; border-radius: 10px; background: var(--paper); border: 1px dashed var(--line); overflow-wrap: anywhere; user-select: all }
+.otext { display: flex; flex-direction: column; gap: 2px; min-width: 0 }
+.ozh { font: 14px/1.5 var(--f-body); color: var(--muted) }
+.owhy { font: 13.5px/1.6 var(--f-body); color: var(--ink); margin-top: 4px; white-space: normal }
+.stem-zh { margin: -8px 0 0; color: var(--muted); font-size: 15px; line-height: 1.7 }
 .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 99px; font-size: 14px; z-index: 50; box-shadow: var(--shadow) }
 .empty { text-align: center; padding: 40px 20px; color: var(--muted) }
 select { font: inherit; padding: 7px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink) }
@@ -1173,9 +1177,9 @@ function detailHtml(q, chosen, order, opt = {}) {
   const st = S.q[q.id];
   return `<div class="detail">
     <div class="expl"><b>${right ? "答對了。" : chosen == null ? "未作答。" : "答錯了。"}</b> ${esc(q.expl)}</div>
-    ${trans ? `<div class="sec"><div class="lab">中文翻譯</div>${trans}</div>` : ""}
+    ${trans && !opt.inline ? `<div class="sec"><div class="lab">中文翻譯</div>${trans}</div>` : ""}
     ${q.ev ? `<div class="sec"><div class="lab">答題線索（原文已在文章中標示）</div><blockquote class="en">${esc(q.ev)}</blockquote></div>` : ""}
-    <div class="sec"><div class="lab">選項分析</div><div class="orows">${rows}</div></div>
+    ${opt.inline ? "" : `<div class="sec"><div class="lab">選項分析</div><div class="orows">${rows}</div></div>`}
     ${q.w && q.w.length ? `<div class="sec"><div class="lab">重點單字</div>${wordChips(q.w)}</div>` : ""}
     ${!right && st ? `<div class="sec"><div class="lab">錯因標記：這題為什麼錯？</div><div class="row" style="gap:6px">${CAUSES.map(c => `<button class="chip" data-cause="${q.id}" data-c="${c}" aria-pressed="${st.why === c}">${c}</button>`).join("")}</div></div>` : ""}
     ${sampleFn ? chatHtml(q) : ""}
@@ -1405,19 +1409,21 @@ function qCard(q, num) {
   const s = session, perm = s.perm[q.id], chosen = s.ans[q.id];
   const reveal = s.mode === "practice" ? chosen != null : s.done;
   const p2 = q.part === 2, showText = !p2 || reveal || s.showText;
+  // 作答後把中文直接放在題目和選項旁邊，詳解就不用再重複一次
+  const shown = reveal && (s.mode === "practice" || s.done);
   const opts = perm.map((o, i) => {
     let cls = "";
     if (reveal) { if (o === q.ans) cls = "right"; else if (o === chosen) cls = "wrong"; }
     else if (o === chosen) cls = "sel";
     const mark = reveal && o === q.ans ? "正解" : reveal && o === chosen ? "你的答案" : "";
-    return `<button class="opt ${cls}" data-q="${q.id}" data-o="${o}" ${reveal ? "disabled" : ""}><span class="bubble">${LET[i]}</span><span>${showText ? esc(q.opts[o]) : `<span class="hidden-text">（聽選項 ${LET[i]}）</span>`}</span><span class="mark">${mark}</span></button>`;
+    return `<button class="opt ${cls}" data-q="${q.id}" data-o="${o}" ${reveal ? "disabled" : ""}><span class="bubble">${LET[i]}</span><span class="otext">${showText ? `<span>${esc(q.opts[o])}</span>` : `<span class="hidden-text">（聽選項 ${LET[i]}）</span>`}${shown && q.oz ? `<span class="ozh">${esc(q.oz[o])}</span>` : ""}${shown && q.why ? `<span class="owhy">${esc(q.why[o])}</span>` : ""}</span><span class="mark">${mark}</span></button>`;
   }).join("");
   let head = "";
   const exam = s.mode === "test" && !s.done, used = exam && s.played && s.played[q.id];
-  if (p2) head = `<div class="audio"><button class="play" id="play-${q.id}" data-play="${q.id}" aria-label="播放題目" ${used ? "disabled" : ""}>${svg("play")}</button><div style="min-width:0"><b>聽問句與三個回應，選出最適當的回答</b><div class="muted" style="font-size:13px">${!tts.ok ? "此瀏覽器不支援語音，已直接顯示文字。" : exam ? (used ? "已播放。考試模式每題只播一次。" : "考試模式：只能播放一次，固定標準語速。") : `語速 <select id="rate">${[[0.8, "慢"], [0.92, "標準"], [1.05, "快"]].map(([v, l]) => `<option value="${v}" ${tts.rate === v ? "selected" : ""}>${l}</option>`).join("")}</select> ${!reveal && !s.showText ? `· <button class="btn ghost sm" data-showtext style="padding:2px 10px">聽不到？顯示文字</button>` : ""}`}</div>${reveal || s.showText || !tts.ok ? `<p class="stem" style="font-size:16px;margin-top:6px">Q: ${esc(q.stem)}</p>` : ""}</div></div>`;
+  if (p2) head = `<div class="audio"><button class="play" id="play-${q.id}" data-play="${q.id}" aria-label="播放題目" ${used ? "disabled" : ""}>${svg("play")}</button><div style="min-width:0"><b>聽問句與三個回應，選出最適當的回答</b><div class="muted" style="font-size:13px">${!tts.ok ? "此瀏覽器不支援語音，已直接顯示文字。" : exam ? (used ? "已播放。考試模式每題只播一次。" : "考試模式：只能播放一次，固定標準語速。") : `語速 <select id="rate">${[[0.8, "慢"], [0.92, "標準"], [1.05, "快"]].map(([v, l]) => `<option value="${v}" ${tts.rate === v ? "selected" : ""}>${l}</option>`).join("")}</select> ${!reveal && !s.showText ? `· <button class="btn ghost sm" data-showtext style="padding:2px 10px">聽不到？顯示文字</button>` : ""}`}</div>${reveal || s.showText || !tts.ok ? `<p class="stem" style="font-size:16px;margin-top:6px">Q: ${esc(q.stem)}</p>${shown && q.zh ? `<p class="stem-zh">${esc(q.zh)}</p>` : ""}` : ""}</div></div>`;
   else if (q.part === 6) head = `<p class="stem" style="font-size:16px">選出最適合填入 <span class="slot">(${q.slot})</span> 的答案</p>`;
-  else head = `<p class="stem">${stemHtml(q, s.mode === "practice" && reveal ? q.ans : null)}</p>`;
-  const expl = reveal && (s.mode === "practice" || s.done) ? detailHtml(q, chosen, perm) : "";
+  else head = `<p class="stem">${stemHtml(q, s.mode === "practice" && reveal ? q.ans : null)}</p>${shown && q.zh ? `<p class="stem-zh">${esc(q.zh)}</p>` : ""}`;
+  const expl = shown ? detailHtml(q, chosen, perm, { inline: true }) : "";
   return `<div class="qcard"><div class="qhead"><span class="qnum">${String(num).padStart(2, "0")}</span><span class="pill">Part ${q.part} · ${SKILLS[q.skill].name}</span>${q.ai ? '<span class="pill ok">AI 題</span>' : ""}${q.hard ? '<span class="pill hard">進階</span>' : ""}${repeatTag(s.before && s.before[q.id])}</div>${head}<div class="opts">${opts}</div>${expl}</div>`;
 }
 // 標出重複出現的題目和原因，讓你知道是複習還是題庫用完
