@@ -256,6 +256,7 @@ mark.ev { background: var(--hl); color: inherit; border-radius: 3px; padding: 0 
 .ozh { font: 14px/1.5 var(--f-body); color: var(--muted) }
 .owhy { font: 13.5px/1.6 var(--f-body); color: var(--ink); margin-top: 4px; white-space: normal }
 .stem-zh { margin: -8px 0 0; color: var(--muted); font-size: 15px; line-height: 1.7 }
+.set-note { margin: 0; font-size: 13px; padding: 8px 12px; border-radius: 10px; background: var(--paper); border: 1px dashed var(--line) }
 .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 99px; font-size: 14px; z-index: 50; box-shadow: var(--shadow) }
 .empty { text-align: center; padding: 40px 20px; color: var(--muted) }
 select { font: inherit; padding: 7px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink) }
@@ -1407,7 +1408,7 @@ function stemHtml(q, filled) {
 }
 function qCard(q, num) {
   const s = session, perm = s.perm[q.id], chosen = s.ans[q.id];
-  const reveal = s.mode === "practice" ? chosen != null : s.done;
+  const reveal = revealed(q.id);
   const p2 = q.part === 2, showText = !p2 || reveal || s.showText;
   // 作答後把中文直接放在題目和選項旁邊，詳解就不用再重複一次
   const shown = reveal && (s.mode === "practice" || s.done);
@@ -1439,11 +1440,12 @@ function viewQuiz() {
   const numOf = id => ids.indexOf(id) + 1;
   const cards = page.qids.map(id => qCard(Q[id], numOf(id))).join("");
   const set = page.set ? SETS[page.set] : null;
-  const shown = set ? set.qids.filter(id => s.mode === "practice" ? s.ans[id] != null : s.done) : [];
+  const shown = set ? set.qids.filter(id => revealed(id)) : [];
+  const setNote = set && s.mode === "practice" && !shown.length ? `<p class="muted set-note">這組題目全部作答完才會一起對答案、顯示詳解，作答完前可以改選。</p>` : "";
   const listenPanel = set && set.listen ? `<div class="passage"><span class="ptitle">Part ${set.part} · ${set.part === 3 ? "簡短對話" : "簡短獨白"}</span>
     <div class="audio" style="white-space:normal;font-family:var(--f-body)"><button class="play" id="play-${set.id}" data-playset="${set.id}" aria-label="播放音檔" ${s.mode === "test" && !s.done && s.played && s.played[set.id] ? "disabled" : ""}>${svg("play")}</button><div style="min-width:0"><b>${set.part === 3 ? "聽一段對話" : "聽一段獨白"}，回答右邊三題</b><div class="muted" style="font-size:13px">${s.mode === "test" && !s.done ? (s.played && s.played[set.id] ? "已播放。考試模式每段只播一次。" : "考試模式：只能播放一次，固定標準語速。題目也會唸出來。") + `<span hidden>` : ""}題目也會唸出來 · 語速 <select id="rate">${[[0.8, "慢"], [0.92, "標準"], [1.05, "快"]].map(([v, l]) => `<option value="${v}" ${tts.rate === v ? "selected" : ""}>${l}</option>`).join("")}</select>${!s.showText && s.mode === "practice" && shown.length < set.qids.length ? ` · <button class="btn ghost sm" data-showtext style="padding:2px 10px">顯示原文</button>` : ""}${s.mode === "test" && !s.done ? "</span>" : ""}</div></div></div>
     ${shown.length === set.qids.length || s.showText ? `<div style="margin-top:14px">${passageHtml(set, shown.map(id => Q[id].ev).filter(Boolean))}</div><div style="white-space:normal;font-family:var(--f-body);font-size:15px;margin-top:14px">${setExtras(set)}</div>` : `<p class="muted" style="white-space:normal;font-family:var(--f-body);font-size:14px;margin:14px 0 0">先看右邊的題目，再按播放。三題都作答後會顯示原文、中文翻譯和答題線索。</p>`}</div>` : "";
-  const body = set && set.listen ? `<div class="set">${listenPanel}<div style="display:flex;flex-direction:column;gap:14px;min-width:0">${cards}</div></div>` : set ? `<div class="set"><div class="passage ${s.fold ? "folded" : ""}"><div class="phead"><span class="ptitle">Part ${set.part} · ${esc(set.title)}</span><button class="pfold" data-pfold aria-expanded="${!s.fold}">${s.fold ? "展開文章" : "收合文章"}</button></div>${set.head ? `<span class="head">${esc(set.head)}</span>` : ""}${passageHtml(set, shown.map(id => Q[id].ev).filter(Boolean))}${shown.length === set.qids.length ? `<div style="white-space:normal;font-family:var(--f-body);font-size:15px;margin-top:14px">${setExtras(set)}</div>` : ""}</div><div style="display:flex;flex-direction:column;gap:14px;min-width:0">${cards}</div></div>` : cards;
+  const body = set && set.listen ? `<div class="set">${listenPanel}<div style="display:flex;flex-direction:column;gap:14px;min-width:0">${setNote}${cards}</div></div>` : set ? `<div class="set"><div class="passage ${s.fold ? "folded" : ""}"><div class="phead"><span class="ptitle">Part ${set.part} · ${esc(set.title)}</span><button class="pfold" data-pfold aria-expanded="${!s.fold}">${s.fold ? "展開文章" : "收合文章"}</button></div>${set.head ? `<span class="head">${esc(set.head)}</span>` : ""}${passageHtml(set, shown.map(id => Q[id].ev).filter(Boolean))}${shown.length === set.qids.length ? `<div style="white-space:normal;font-family:var(--f-body);font-size:15px;margin-top:14px">${setExtras(set)}</div>` : ""}</div><div style="display:flex;flex-direction:column;gap:14px;min-width:0">${setNote}${cards}</div></div>` : cards;
   const pageDone = page.qids.every(id => s.ans[id] != null);
   const last = s.idx === s.pages.length - 1;
   const test = s.mode === "test";
@@ -1461,9 +1463,18 @@ function viewQuiz() {
         : `<button class="btn${z}" data-next ${!test && !pageDone ? "disabled" : ""}>下一題${sm ? " ›" : ""}</button>`);
   }
 }
+// 題組（Part 3、4、6、7）在練習模式下整組答完才一起對答案，避免前一題的詳解洩漏後一題的答案；答完前可以改選
+const groupOf = qid => (session.pages.find(p => p.qids.includes(qid)) || { qids: [qid] }).qids;
+const groupDone = qid => groupOf(qid).every(id => session.ans[id] != null);
+const revealed = qid => session.mode === "practice" ? session.ans[qid] != null && (!Q[qid].set || groupDone(qid)) : session.done;
 function choose(qid, o) {
   const s = session; if (!s || s.done) return;
-  if (s.mode === "practice") { if (s.ans[qid] != null) return; s.ans[qid] = o; record(Q[qid], o === Q[qid].ans, o); save(); }
+  if (s.mode === "practice") {
+    if (revealed(qid)) return;
+    s.ans[qid] = o;
+    if (!Q[qid].set) { record(Q[qid], o === Q[qid].ans, o); save(); }
+    else if (groupDone(qid)) { groupOf(qid).forEach(id => record(Q[id], s.ans[id] === Q[id].ans, s.ans[id])); save(); }
+  }
   else s.ans[qid] = o;
   const y = window.scrollY; render(); window.scrollTo(0, y);
 }
@@ -1713,7 +1724,7 @@ document.addEventListener("keydown", e => {
   const page = session.pages[session.idx];
   const k = e.key.toUpperCase(), i = LET.indexOf(k);
   if (i >= 0 && k.length === 1) {
-    const qid = page.qids.find(id => session.ans[id] == null) || (session.mode === "test" ? page.qids[page.qids.length - 1] : null);
+    const qid = page.qids.find(id => session.ans[id] == null) || (session.mode === "test" || !revealed(page.qids[0]) ? page.qids[page.qids.length - 1] : null);
     if (qid && i < Q[qid].opts.length) choose(qid, session.perm[qid][i]);
   } else if (e.key === "Enter") {
     const b = $("[data-next]:not(:disabled)") || $("[data-finish]:not(:disabled)"); if (b && session.mode === "practice") b.click();
