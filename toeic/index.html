@@ -557,6 +557,9 @@ function setSyncKey(key) {
   try { key ? localStorage.setItem(SYNC_KEY, key) : localStorage.removeItem(SYNC_KEY); } catch (e) {}
 }
 function syncCard() {
+  // claude.ai 版連不到外部網站，只能提示改用網站版或用備份檔搬移
+  if (window.claude) return `<section class="card backup"><div class="eyebrow">跨裝置同步</div>
+    <p class="muted" style="margin:8px 0 0;font-size:14px">這是 claude.ai 版，進度跟著你的 Claude 帳號同步，<b>不會</b>同步到網站版（toeic-sprint-tearitall.netlify.app）。想讓手機和電腦同步，請兩邊都用網站版；要把這裡的進度搬過去，按下方的「下載備份檔」，再到網站版「從檔案匯入」。</p></section>`;
   if (!sync.on) return "";
   if (!sync.key) return `<section class="card backup"><div class="eyebrow">跨裝置同步</div>
     <p class="muted" style="margin:8px 0 12px;font-size:14px">開啟同步後，手機和電腦輸入同一組同步碼，進度就會自動同步。第一台裝置按「建立同步碼」，其他裝置輸入同一組碼。同步碼就像密碼，知道的人都能讀寫這份進度，請不要外流。</p>
