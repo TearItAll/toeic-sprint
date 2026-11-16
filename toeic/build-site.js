@@ -63,12 +63,17 @@ const CACHE = "toeic-${ver}";
 const CORE = ["./", "index.html", "manifest.webmanifest", ${JS.map(f => JSON.stringify(f)).join(", ")}, "audio/index.js"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
+// 同步 API 一律走網路、不快取；頁面和題庫先試網路（才拿得到新版），離線時用快取；音檔直接用快取
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
-  e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-    if (res.ok && (new URL(e.request.url).origin === location.origin || e.request.url.includes("fonts.g"))) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
-    return res;
-  }).catch(() => hit)));
+  const url = new URL(e.request.url);
+  if (url.origin === location.origin && url.pathname.startsWith("/api/")) return;
+  const put = res => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); } return res; };
+  if (url.pathname.endsWith(".mp3") || url.origin !== location.origin) {
+    e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(put)));
+    return;
+  }
+  e.respondWith(fetch(e.request).then(put).catch(() => caches.match(e.request)));
 });
 `);
 

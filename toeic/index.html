@@ -473,6 +473,7 @@ const bankCount = () => Object.keys(Q).length;
 (window.ZH7 || []).forEach((z, i) => { const set = SETS["p7-" + i]; if (!set) return; set.zh = z.t; set.w = z.w; z.q.forEach((x, k) => { const q = Q[set.qids[k]]; q.zh = x[0]; q.oz = x[1]; q.ev = x[2]; }); });
 
 /* ---------- 狀態與儲存 ---------- */
+const APP_VERSION = "2026.11.17";
 const LSKEY = "toeic-sprint-v1";
 const fresh = () => ({ v: 1, goal: 750, pre: null, q: {}, sk: {}, hist: [], daily: {}, vocab: {}, my: {}, ai: [], chat: {}, goalQ: 0, updated: 0 });
 let S = fresh();
@@ -536,7 +537,7 @@ async function syncNow() {
     sync.at = Date.now();
     setSyncStatus("已同步 " + new Date().toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" }));
   } catch (e) {
-    setSyncStatus(navigator.onLine === false ? "離線中，連上網路後會自動同步" : "同步失敗，稍後會再試");
+    setSyncStatus(navigator.onLine === false ? "離線中，連上網路後會自動同步" : "同步失敗（" + (e && e.message || "網路錯誤") + "），稍後會再試");
   } finally {
     sync.busy = false;
     if (sync.again) { sync.again = false; syncSchedule(); }
@@ -823,7 +824,14 @@ async function auPlay(name, clips, rate, done) {
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
+    // iPhone 的靜音開關會讓網頁音訊沒聲音：宣告成「播放媒體」，並在點擊當下先播一段無聲音訊解鎖
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+    if (!au.unlocked) {
+      au.unlocked = true;
+      try { const el = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="); el.play().catch(() => {}); } catch (e) {}
+    }
     au.ctx = au.ctx || new AC();
+    try { const s = au.ctx.createBufferSource(); s.buffer = au.ctx.createBuffer(1, 1, 22050); s.connect(au.ctx.destination); s.start(0); } catch (e) {}
     if (au.ctx.state === "suspended") await au.ctx.resume();
     const buf = await auLoad(name);
     if (tok !== au.tok) return true;
@@ -904,7 +912,7 @@ function renderRail() {
   const badge = { review: dueReviews().length, vocab: vocabDue().length };
   $("#rail").innerHTML = `<div class="brand"><div class="brand-mark">990</div><div><b>多益衝分站</b><small>TOEIC SPRINT</small></div></div>` +
     NAV.map(([k, l]) => `<button class="nav" data-go="${k}" ${current === k ? 'aria-current="page"' : ""}>${svg(k)}${l}${badge[k] ? `<span class="count">${badge[k]}</span>` : ""}</button>`).join("") +
-    `<div class="rail-foot">題庫 <b class="num">${bankCount()}</b> 題 · 單字 <b class="num">${VOCAB.length}</b><br>${cloud.status === "cloud" ? "進度已同步到你的帳號" : sync.on && sync.key ? `<span id="rail-sync">跨裝置同步：${esc(sync.status || "已開啟")}</span>` : "進度儲存在此瀏覽器"}</div>`;
+    `<div class="rail-foot">題庫 <b class="num">${bankCount()}</b> 題 · 單字 <b class="num">${VOCAB.length}</b> · 版本 ${APP_VERSION}<br>${cloud.status === "cloud" ? "進度已同步到你的帳號" : sync.on && sync.key ? `<span id="rail-sync">跨裝置同步：${esc(sync.status || "已開啟")}</span>` : "進度儲存在此瀏覽器"}</div>`;
   $("#tabs").innerHTML = NAV.map(([k, l]) => `<button data-go="${k}" ${current === k ? 'aria-current="page"' : ""}>${svg(k)}${l}</button>`).join("");
 }
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2400); }
@@ -961,7 +969,7 @@ function backupCard() {
     <p class="muted" style="margin:8px 0 12px;font-size:14px">要把進度搬到手機或另一台電腦，最穩的方法是存成檔案，再用 AirDrop、雲端硬碟或寄給自己的方式傳過去，然後在那邊「從檔案匯入」。也可以複製進度碼貼過去，但請用備忘錄或 e-mail 傳，聊天軟體可能會把太長的文字截斷。</p>
     <div class="row"><button class="btn ghost sm" data-download ${!window.claude || dlCap ? "" : "hidden"}>下載備份檔</button><button class="btn ghost sm" data-export>複製進度碼</button><label class="btn ghost sm" style="cursor:pointer">從檔案匯入<input type="file" id="import-file" accept=".json,.txt,application/json,text/plain" hidden></label></div>
     <textarea id="import-box" style="margin-top:12px" placeholder="或在這裡貼上進度碼，再按「匯入進度」" aria-label="貼上進度碼"></textarea>
-    <div class="row" style="margin-top:8px"><button class="btn sm" data-import>${importArmed ? "確定取代目前進度" : "匯入進度"}</button><span class="muted" id="import-note" style="font-size:13px">${importArmed ? "匯入會取代這台裝置上目前的進度，再按一次確認。" : ""}</span></div></section>`;
+    <div class="row" style="margin-top:8px"><button class="btn sm" data-import>${importArmed ? "確定取代目前進度" : "匯入進度"}</button><span class="muted" id="import-note" style="font-size:13px">${importArmed ? "匯入會取代這台裝置上目前的進度，再按一次確認。" : ""}</span></div><p class="muted" style="font-size:12px;margin:14px 0 0">目前版本：${APP_VERSION}</p></section>`;
 }
 async function exportCode(btn) {
   const p = makeCode();
