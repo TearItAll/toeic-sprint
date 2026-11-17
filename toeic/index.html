@@ -257,6 +257,13 @@ mark.ev { background: var(--hl); color: inherit; border-radius: 3px; padding: 0 
 .owhy { font: 13.5px/1.6 var(--f-body); color: var(--ink); margin-top: 4px; white-space: normal }
 .stem-zh { margin: -8px 0 0; color: var(--muted); font-size: 15px; line-height: 1.7 }
 .set-note { margin: 0; font-size: 13px; padding: 8px 12px; border-radius: 10px; background: var(--paper); border: 1px dashed var(--line) }
+.qhead { position: relative; padding-right: 92px }
+.qhead .star { position: absolute; right: 0; top: 50%; transform: translateY(-50%) }
+.star { border: 1.5px solid var(--line); background: var(--card); color: var(--muted); border-radius: 99px; padding: 3px 12px; font: 600 13px var(--f-body); white-space: nowrap }
+.star:hover { border-color: #E0A100; color: #B07A00 }
+.star.on { border-color: #E0A100; background: rgba(255, 200, 40, .16); color: #B07A00 }
+:root[data-theme="dark"] .star.on, :root[data-theme="dark"] .star:hover { color: #FFC940 }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .star.on, :root:not([data-theme="light"]) .star:hover { color: #FFC940 } }
 .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 99px; font-size: 14px; z-index: 50; box-shadow: var(--shadow) }
 .empty { text-align: center; padding: 40px 20px; color: var(--muted) }
 select { font: inherit; padding: 7px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink) }
@@ -431,6 +438,7 @@ details.rev[open] { box-shadow: var(--shadow-lift) }
 <script src="bank3.js"></script>
 <script src="vocab2.js"></script>
 <script src="listen.js"></script>
+<script src="listen2.js"></script>
 <script src="audio/index.js"></script>
 <script>
 "use strict";
@@ -473,9 +481,9 @@ const bankCount = () => Object.keys(Q).length;
 (window.ZH7 || []).forEach((z, i) => { const set = SETS["p7-" + i]; if (!set) return; set.zh = z.t; set.w = z.w; z.q.forEach((x, k) => { const q = Q[set.qids[k]]; q.zh = x[0]; q.oz = x[1]; q.ev = x[2]; }); });
 
 /* ---------- 狀態與儲存 ---------- */
-const APP_VERSION = "2026.11.18";
+const APP_VERSION = "2026.11.19";
 const LSKEY = "toeic-sprint-v1";
-const fresh = () => ({ v: 1, goal: 750, pre: null, q: {}, sk: {}, hist: [], daily: {}, vocab: {}, my: {}, ai: [], chat: {}, goalQ: 0, updated: 0 });
+const fresh = () => ({ v: 1, goal: 750, pre: null, q: {}, sk: {}, hist: [], daily: {}, vocab: {}, my: {}, ai: [], chat: {}, goalQ: 0, fav: {}, updated: 0 });
 let S = fresh();
 try { const raw = localStorage.getItem(LSKEY); if (raw) S = Object.assign(fresh(), JSON.parse(raw)); } catch (e) {}
 S.ai.forEach(addAiQ);
@@ -488,6 +496,18 @@ migrate();
 function addAiQ(q) { Q[q.id] = q; }
 
 const cloud = { db: null, uid: null, ref: null, chain: Promise.resolve(), timer: null, status: "local" };
+/* ---------- 收藏題 ---------- */
+const isFav = id => (S.fav || {})[id] > 0;
+const favIds = () => Object.keys(S.fav || {}).filter(id => Q[id] && isFav(id)).sort((a, b) => S.fav[b] - S.fav[a]);
+function toggleFav(id) {
+  S.fav = S.fav || {};
+  S.fav[id] = isFav(id) ? -Date.now() : Date.now();
+  save();
+  document.querySelectorAll(`[data-fav="${CSS.escape(id)}"]`).forEach(b => { b.classList.toggle("on", isFav(id)); b.setAttribute("aria-pressed", isFav(id)); b.textContent = isFav(id) ? "★ 已收藏" : "☆ 收藏"; });
+  toast(isFav(id) ? "已加入收藏" : "已取消收藏");
+}
+const favBtn = id => `<button class="star ${isFav(id) ? "on" : ""}" data-fav="${id}" aria-pressed="${isFav(id)}">${isFav(id) ? "★ 已收藏" : "☆ 收藏"}</button>`;
+
 /* ---------- 網站版跨裝置同步（Netlify） ---------- */
 // 每台裝置輸入同一組同步碼。每次存檔約 3 秒後，先下載雲端版本合併，再上傳合併結果，
 // 這樣兩台裝置各自練習的紀錄都會保留，不會互相蓋掉。
@@ -506,6 +526,7 @@ function mergeState(a, b) {
   for (const [d, n] of Object.entries(sum)) out.daily[d] = Math.max(out.daily[d] || 0, n);
   out.vocab = Object.assign({}, a.vocab); for (const [w, v] of Object.entries(b.vocab || {})) { const m = out.vocab[w]; if (!m || (v.due || 0) > (m.due || 0)) out.vocab[w] = v; }
   out.my = Object.assign({}, a.my, b.my);
+  out.fav = Object.assign({}, a.fav); for (const [id, t] of Object.entries(b.fav || {})) if (Math.abs(t) > Math.abs(out.fav[id] || 0)) out.fav[id] = t;
   const ai = new Map(); [...(a.ai || []), ...(b.ai || [])].forEach(x => ai.set(x.id, x)); out.ai = [...ai.values()].slice(-60);
   const hs = new Map(); [...(a.hist || []), ...(b.hist || [])].forEach(x => hs.set(x.t + ":" + x.kind, x)); out.hist = [...hs.values()].sort((x, y) => x.t - y.t).slice(-80);
   out.chat = a.chat || {};
@@ -782,6 +803,7 @@ const builders = {
     const ids = Object.keys(Q).filter(id => Q[id].skill === sk);
     return newSession({ kind: "skill", title: SKILLS[sk].name + " 專項", pages: pages(pickWeighted(ids, 10)) });
   },
+  fav(ids) { return newSession({ kind: "fav", title: "收藏題複習", pages: pages(shuffle(ids)).slice(0, 20) }); },
   review(ids) { return newSession({ kind: "review", title: "錯題複習", pages: pages(shuffle(ids).slice(0, 15)) }); },
   mock() {
     const p2 = pickWeighted(idsOf(2), 10), p5 = pickWeighted(idsOf(5), 20);
@@ -911,7 +933,7 @@ const ICON = {
   play: '<path d="M7 4.5v15l13-7.5z" fill="currentColor"/>'
 };
 const svg = (n, extra = "") => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${extra}>${ICON[n]}</svg>`;
-const NAV = [["home", "總覽"], ["practice", "練習"], ["mock", "模考"], ["review", "錯題本"], ["vocab", "單字"]];
+const NAV = [["home", "總覽"], ["practice", "練習"], ["mock", "模考"], ["review", "錯題收藏"], ["vocab", "單字"]];
 let current = "home", session = null;
 function renderRail() {
   const badge = { review: dueReviews().length, vocab: vocabDue().length };
@@ -1068,6 +1090,7 @@ function viewHome() {
       <div style="margin-top:6px">
         <div class="plan-item"><span class="tick ${left === 0 ? "done" : ""}"></span><div><b>今日練習</b><div class="muted" style="font-size:13px">${left >= 15 ? `一次 ${left} 題，聽力、閱讀題組都有` : left > 0 ? "剩不到 15 題，可以加練一回 20 題" : "已完成，想多練可以再做一回 20 題"}${weak.length ? " · 加強：" + weak.map(w => SKILLS[w.k].name).join("、") : ""}</div></div><button class="btn sm" data-start="smart">${left >= 15 ? "開始" : "加練"}</button></div>
         <div class="plan-item"><span class="tick ${rv === 0 && wrongBook().length ? "done" : ""}"></span><div><b>錯題複習</b><div class="muted" style="font-size:13px">${rv ? `${rv} 題今天到期` : "目前沒有到期的錯題"}</div></div><button class="btn sm ghost" data-go="review">${rv ? "複習" : "查看"}</button></div>
+        ${favIds().length ? `<div class="plan-item"><span class="tick"></span><div><b>收藏題</b><div class="muted" style="font-size:13px">${favIds().length} 題，隨時可以快速複習</div></div><button class="btn sm ghost" data-gofav>複習</button></div>` : ""}
         <div class="plan-item"><span class="tick ${vd === 0 && Object.keys(S.vocab).length ? "done" : ""}"></span><div><b>單字卡</b><div class="muted" style="font-size:13px">${vd} 張待複習 · ${vn} 張新字</div></div><button class="btn sm ghost" data-go="vocab">背單字</button></div>
       </div>
       <div class="stat-row" style="margin-top:14px">
@@ -1101,6 +1124,7 @@ function viewPractice() {
     ${window.claude ? `<div class="mode" id="ai-card"><span class="part-tag">AI 出題</span><h3>針對弱點產生新題目</h3><span class="muted">請 Claude 依你目前最弱的文法項目（${esc(weak)}）即時寫 6 題全新的 Part 5 題目，附中文解析，產生後會存進你的題庫。</span>
       <div class="row"><button class="btn sm print" id="ai-gen" ${sampleFn ? "" : "disabled"}>產生 6 題</button><span class="muted" id="ai-status" style="font-size:13px">${sampleFn ? `已產生 ${S.ai.length} 題` : "這個檢視無法使用 AI 出題，其他功能不受影響。"}</span></div></div>` : ""}
   </section>
+  ${favIds().length ? `<button class="mode" data-gofav style="flex-direction:row;align-items:center;justify-content:space-between"><span><span class="part-tag">★ 我的收藏</span><h3 style="margin-top:4px">收藏題複習</h3><span class="muted">${favIds().length} 題，一次最多複習 20 題</span></span><span class="btn sm">開始</span></button>` : ""}
   <div class="eyebrow" style="margin-top:6px">分 Part 練習</div>
   <section class="grid g2">
     ${[[2, "應答問題", `${P2.length} 題 · 語音朗讀`, "聽一句問句，從三個回應選最適當的。可調整語速。", 10], [3, "簡短對話", `${P34.filter(s => s.part === 3).length} 組 · ${P34.filter(s => s.part === 3).length * 3} 題`, "兩到三人的職場對話，聽完回答 3 題，含說話者意圖題。", 2], [4, "簡短獨白", `${P34.filter(s => s.part === 4).length} 組 · ${P34.filter(s => s.part === 4).length * 3} 題`, "廣播、留言、導覽、會議發言等，聽完回答 3 題。", 2], [5, "句子填空", `${idsOf(5).length} 題`, "文法與字彙單句填空，多益閱讀的得分關鍵。", 12], [6, "段落填空", `${P6.length} 篇 · ${P6.length * 4} 題`, "短文中的詞彙、文法和句子插入題。", 2], [7, "閱讀理解", `${P7.length} 篇 · ${P7.reduce((s, x) => s + x.qs.length, 0)} 題`, "公告、e-mail、廣告、訊息對話等多益常見文體。", 3]]
@@ -1205,7 +1229,20 @@ function setExtras(set) {
 
 /* ---------- 頁面：錯題本 ---------- */
 const rf = { part: "all", skill: "all", cause: "all" };
+let reviewTab = "wrong";
+const reviewTabs = () => `<div class="row"><button class="chip" data-rtab="wrong" aria-pressed="${reviewTab === "wrong"}">錯題本 ${wrongBook().length}</button><button class="chip" data-rtab="fav" aria-pressed="${reviewTab === "fav"}">★ 我的收藏 ${favIds().length}</button></div>`;
+function viewFav() {
+  const all = favIds();
+  const list = all.filter(id => rf.part === "all" || rf.part === "due" || String(Q[id].part) === rf.part);
+  return `<header class="row between"><div><div class="eyebrow">Favorites</div><h1 style="font-size:30px;margin-top:6px">我的收藏</h1><p class="muted" style="margin:6px 0 0">在任何題目右上角按「☆ 收藏」，就會收進這裡。適合存放想再看一次的重要題目，和錯題本分開，不會因為答對就自動移出。</p></div>
+  <div class="row"><button class="btn print" data-review="fav" ${list.length ? "" : "disabled"}>複習${rf.part === "all" || rf.part === "due" ? "全部" : "這些"}收藏（${list.length} 題）</button></div></header>
+  ${reviewTabs()}
+  <div class="row">${[["all", "全部"], ["2", "Part 2"], ["3", "Part 3"], ["4", "Part 4"], ["5", "Part 5"], ["6", "Part 6"], ["7", "Part 7"]].map(([k, l]) => `<button class="chip" data-rfilter="${k}" aria-pressed="${rf.part === k || (k === "all" && rf.part === "due")}">${l}</button>`).join("")}</div>
+  ${list.length ? `<div style="display:flex;flex-direction:column;gap:8px">${list.map(id => revItem(Q[id], S.q[id] ? (S.q[id].pick === undefined ? -1 : S.q[id].pick) : null, false)).join("")}</div>`
+    : `<div class="card empty">${all.length ? "這個分類沒有收藏的題目。" : "還沒有收藏題目。做題時按題目右上角的「☆ 收藏」，就能把重要或想加強的題目收進來，之後在這裡一次複習。"}</div>`}`;
+}
 function viewReview() {
+  if (reviewTab === "fav") return viewFav();
   const all = wrongBook(), due = dueReviews();
   const cnt = (arr, f) => arr.reduce((m, id) => { const k = f(id); m[k] = (m[k] || 0) + 1; return m; }, {});
   const causes = cnt(all, id => S.q[id].why || "未標記"), skills = cnt(all, id => Q[id].skill);
@@ -1216,6 +1253,7 @@ function viewReview() {
     .sort((a, b) => (S.q[b].n - S.q[b].c) - (S.q[a].n - S.q[a].c) || S.q[b].t - S.q[a].t);
   return `<header class="row between"><div><div class="eyebrow">Error log</div><h1 style="font-size:30px;margin-top:6px">錯題本</h1><p class="muted" style="margin:6px 0 0">答錯的題目會自動收進來，當天、隔 1 天、再隔 3 天重新出現；連續答對 3 次，或你手動標記「已掌握」，就會移出。</p></div>
   <div class="row"><button class="btn print" data-review="due" ${due.length ? "" : "disabled"}>複習到期 ${due.length} 題</button><button class="btn ghost" data-review="list" ${list.length ? "" : "disabled"}>重做下方 ${list.length} 題</button></div></header>
+  ${reviewTabs()}
   ${all.length ? `<section class="grid g3">
     <div class="card"><div class="eyebrow">錯題總覽</div><div class="stat-row" style="grid-template-columns:1fr 1fr;margin-top:8px"><div class="stat"><b>${all.length}</b><span>錯題總數</span></div><div class="stat"><b>${due.length}</b><span>今天到期</span></div></div></div>
     <div class="card"><div class="eyebrow">錯因分布</div><div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${Object.entries(causes).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<div class="cbar"><span>${c}</span><i style="width:${n / cMax * 100}%"></i><b class="num">${n}</b></div>`).join("")}</div>${causes["未標記"] ? `<p class="muted" style="font-size:12px;margin:8px 0 0">展開題目可標記錯因，找出自己最常犯的錯。</p>` : ""}</div>
@@ -1233,7 +1271,7 @@ function revItem(q, chosen, inBook) {
   const set = q.set ? SETS[q.set] : null;
   const order = q.opts.map((_, i) => i);
   return `<details class="rev" data-id="${q.id}"><summary><span class="part-tag">P${q.part}</span>${tag}<span class="sum-text">${esc(qText(q))}</span><span class="pill">${SKILLS[q.skill].name}</span></summary>
-  <div class="rev-body">${set ? `<div class="passage inline"><span class="ptitle">Part ${set.part} · ${esc(set.title)}</span>${set.listen ? `<button class="btn ghost sm" data-playset="${set.id}" id="play-${set.id}" style="margin-bottom:8px">播放音檔</button>` : ""}${set.head ? `<span class="head">${esc(set.head)}</span>` : ""}${passageHtml(set, q.ev ? [q.ev] : [], q.slot)}</div>${setExtras(set)}` : ""}
+  <div class="rev-body"><div class="row" style="justify-content:flex-end">${favBtn(q.id)}</div>${set ? `<div class="passage inline"><span class="ptitle">Part ${set.part} · ${esc(set.title)}</span>${set.listen ? `<button class="btn ghost sm" data-playset="${set.id}" id="play-${set.id}" style="margin-bottom:8px">播放音檔</button>` : ""}${set.head ? `<span class="head">${esc(set.head)}</span>` : ""}${passageHtml(set, q.ev ? [q.ev] : [], q.slot)}</div>${setExtras(set)}` : ""}
   ${detailHtml(q, chosen, order)}
   ${inBook ? `<div class="row between" style="margin-top:4px"><span class="muted" style="font-size:12px">${st.rv && st.rv.due > Date.now() ? "下次複習：" + new Date(st.rv.due).toLocaleDateString("zh-TW") : "今天到期"}</span><button class="btn ghost sm" data-master="${q.id}">標記已掌握，移出錯題本</button></div>` : ""}</div></details>`;
 }
@@ -1438,7 +1476,7 @@ function qCard(q, num) {
   else if (q.part === 6) head = `<p class="stem" style="font-size:16px">選出最適合填入 <span class="slot">(${q.slot})</span> 的答案</p>`;
   else head = `<p class="stem">${stemHtml(q, s.mode === "practice" && reveal ? q.ans : null)}</p>${shown && q.zh ? `<p class="stem-zh">${esc(q.zh)}</p>` : ""}`;
   const expl = shown ? detailHtml(q, chosen, perm, { inline: true }) : "";
-  return `<div class="qcard"><div class="qhead"><span class="qnum">${String(num).padStart(2, "0")}</span><span class="pill">Part ${q.part} · ${SKILLS[q.skill].name}</span>${q.ai ? '<span class="pill ok">AI 題</span>' : ""}${q.hard ? '<span class="pill hard">進階</span>' : ""}${repeatTag(s.before && s.before[q.id])}</div>${head}<div class="opts">${opts}</div>${expl}</div>`;
+  return `<div class="qcard"><div class="qhead">${favBtn(q.id)}<span class="qnum">${String(num).padStart(2, "0")}</span><span class="pill">Part ${q.part} · ${SKILLS[q.skill].name}</span>${q.ai ? '<span class="pill ok">AI 題</span>' : ""}${q.hard ? '<span class="pill hard">進階</span>' : ""}${repeatTag(s.before && s.before[q.id])}</div>${head}<div class="opts">${opts}</div>${expl}</div>`;
 }
 // 標出重複出現的題目和原因，讓你知道是複習還是題庫用完
 function repeatTag(b) {
@@ -1649,6 +1687,7 @@ document.addEventListener("click", e => {
   if (d.go) return go(d.go);
   if (d.baseedit != null) { editBase = true; return render(); }
   if (d.basecancel != null) { editBase = false; return render(); }
+  if (d.gofav != null) { reviewTab = "fav"; return go("review"); }
   if (d.goalq) { S.goalQ = +d.goalq; save(); return render(); }
   if (d.playset) return playSet(SETS[d.playset]);
   if (d.chatopen) {
@@ -1680,7 +1719,13 @@ document.addEventListener("click", e => {
   if (d.part) return startSession(builders.part(+d.part, +d.n));
   if (d.skill) return startSession(builders.skill(d.skill));
   if (d.goal) { S.goal = +d.goal; save(); return render(); }
-  if (d.review) { const ids = d.review === "due" ? dueReviews() : [...document.querySelectorAll("details.rev[data-id]")].map(el => el.dataset.id); if (ids.length) startSession(builders.review(ids)); return; }
+  if (d.review) {
+    const ids = d.review === "due" ? dueReviews() : [...document.querySelectorAll("details.rev[data-id]")].map(el => el.dataset.id);
+    if (ids.length) startSession(d.review === "fav" ? builders.fav(ids) : builders.review(ids));
+    return;
+  }
+  if (d.fav) return toggleFav(d.fav);
+  if (d.rtab) { reviewTab = d.rtab; return render(); }
   if (d.rfilter) { rf.part = d.rfilter; return render(); }
   if (d.addword) {
     const w = d.addword;

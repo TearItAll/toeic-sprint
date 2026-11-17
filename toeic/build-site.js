@@ -8,7 +8,7 @@ fs.mkdirSync(ROOT, { recursive: true });
 for (const f of fs.readdirSync(ROOT)) if (!["node_modules", ".netlify", "package-lock.json", ".gitignore"].includes(f)) fs.rmSync(path.join(ROOT, f), { recursive: true, force: true });
 fs.mkdirSync(path.join(OUT, "audio"), { recursive: true });
 
-const JS = ["bank.js", "zh.js", "bank2.js", "bank3.js", "vocab2.js", "listen.js"];
+const JS = ["bank.js", "zh.js", "bank2.js", "bank3.js", "vocab2.js", "listen.js", "listen2.js"];
 JS.forEach(f => fs.copyFileSync(path.join(SRC, f), path.join(OUT, f)));
 const audio = fs.readdirSync(path.join(SRC, "audio"));
 audio.forEach(f => fs.copyFileSync(path.join(SRC, "audio", f), path.join(OUT, "audio", f)));
