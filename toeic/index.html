@@ -440,6 +440,7 @@ details.rev[open] { box-shadow: var(--shadow-lift) }
 <script src="vocab2.js"></script>
 <script src="listen.js"></script>
 <script src="listen2.js"></script>
+<script src="listen3.js"></script>
 <script src="audio/index.js"></script>
 <script>
 "use strict";
@@ -482,7 +483,7 @@ const bankCount = () => Object.keys(Q).length;
 (window.ZH7 || []).forEach((z, i) => { const set = SETS["p7-" + i]; if (!set) return; set.zh = z.t; set.w = z.w; z.q.forEach((x, k) => { const q = Q[set.qids[k]]; q.zh = x[0]; q.oz = x[1]; q.ev = x[2]; }); });
 
 /* ---------- 狀態與儲存 ---------- */
-const APP_VERSION = "2026.11.20";
+const APP_VERSION = "2026.11.21";
 const LSKEY = "toeic-sprint-v1";
 const fresh = () => ({ v: 1, goal: 750, pre: null, q: {}, sk: {}, hist: [], daily: {}, vocab: {}, my: {}, ai: [], chat: {}, goalQ: 0, fav: {}, updated: 0 });
 let S = fresh();
