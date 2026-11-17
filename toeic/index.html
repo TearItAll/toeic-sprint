@@ -473,7 +473,7 @@ const bankCount = () => Object.keys(Q).length;
 (window.ZH7 || []).forEach((z, i) => { const set = SETS["p7-" + i]; if (!set) return; set.zh = z.t; set.w = z.w; z.q.forEach((x, k) => { const q = Q[set.qids[k]]; q.zh = x[0]; q.oz = x[1]; q.ev = x[2]; }); });
 
 /* ---------- 狀態與儲存 ---------- */
-const APP_VERSION = "2026.11.17";
+const APP_VERSION = "2026.11.18";
 const LSKEY = "toeic-sprint-v1";
 const fresh = () => ({ v: 1, goal: 750, pre: null, q: {}, sk: {}, hist: [], daily: {}, vocab: {}, my: {}, ai: [], chat: {}, goalQ: 0, updated: 0 });
 let S = fresh();
@@ -694,6 +694,8 @@ function weightFor(id) {
 }
 // 出題順序：沒做過的題目 → 上次答錯的題目 → 最久沒做的已答對題目；同一層內依弱點加權抽
 function pickWeighted(ids, n) {
+  // AI 題本身就在 Q 裡，有些地方又另外併入 S.ai，先去掉重複，同一回才不會抽到同一題兩次
+  ids = [...new Set(ids)];
   const tier = id => { const st = S.q[id]; return !st ? 0 : !st.last ? 1 : 2; };
   const out = [];
   for (const t of [0, 1, 2]) {
@@ -735,7 +737,7 @@ function pages(list) {
   list.forEach(id => {
     const q = Q[id];
     if (q.set) { if (!seen.has(q.set)) { seen.add(q.set); out.push({ set: q.set, qids: SETS[q.set].qids.slice() }); } }
-    else out.push({ qids: [id] });
+    else if (!seen.has(id)) { seen.add(id); out.push({ qids: [id] }); }
   });
   return out;
 }
