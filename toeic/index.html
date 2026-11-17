@@ -436,6 +436,7 @@ details.rev[open] { box-shadow: var(--shadow-lift) }
 <script src="zh.js"></script>
 <script src="bank2.js"></script>
 <script src="bank3.js"></script>
+<script src="bank4.js"></script>
 <script src="vocab2.js"></script>
 <script src="listen.js"></script>
 <script src="listen2.js"></script>
@@ -471,8 +472,8 @@ P7.forEach((s, i) => {
     Q[qid] = { id: qid, part: s.part, set: id, skill: r[0], stem: r[1], opts: r[2], ans: r[3], expl: r[4], zh: r[5], oz: r[6], ev: r[7] }; });
 });
 // 進階題（bank3.js）標上 hard，介面顯示「進階」
-const HD = window.HARD || {};
-Object.values(Q).forEach(q => { const m = q.id.match(/^p([567])-(\d+)/); if (m && HD["p" + m[1]] != null && +m[2] >= HD["p" + m[1]]) q.hard = 1; });
+const HD = window.HARD || {}, HE = window.HARD_END || {}; // HARD_END 之後（bank4.js）是一般難度
+Object.values(Q).forEach(q => { const m = q.id.match(/^p([567])-(\d+)/); if (m && HD["p" + m[1]] != null && +m[2] >= HD["p" + m[1]] && !(HE["p" + m[1]] != null && +m[2] >= HE["p" + m[1]])) q.hard = 1; });
 const bankCount = () => Object.keys(Q).length;
 // 中文翻譯與詳解（zh.js）
 (window.ZH5 || []).forEach((z, i) => { const q = Q["p5-" + i]; if (q) { q.zh = z[0]; q.oz = z[1]; q.w = z[2]; } });
@@ -481,7 +482,7 @@ const bankCount = () => Object.keys(Q).length;
 (window.ZH7 || []).forEach((z, i) => { const set = SETS["p7-" + i]; if (!set) return; set.zh = z.t; set.w = z.w; z.q.forEach((x, k) => { const q = Q[set.qids[k]]; q.zh = x[0]; q.oz = x[1]; q.ev = x[2]; }); });
 
 /* ---------- 狀態與儲存 ---------- */
-const APP_VERSION = "2026.11.19";
+const APP_VERSION = "2026.11.20";
 const LSKEY = "toeic-sprint-v1";
 const fresh = () => ({ v: 1, goal: 750, pre: null, q: {}, sk: {}, hist: [], daily: {}, vocab: {}, my: {}, ai: [], chat: {}, goalQ: 0, fav: {}, updated: 0 });
 let S = fresh();
@@ -1544,12 +1545,25 @@ function finish(force) {
     const fresh = a => a.filter(id => !s.before[id]);
     const fl = fresh(lIds), fr = fresh(rIds);
     h.cal = 1; h.accL = acc(fl); h.accR = acc(fr); h.nNew = fl.length + fr.length;
-    const l = calScore("L", h.accL, fl.length), r = calScore("R", h.accR, fr.length);
-    if (l && r) { h.L = l.v; h.R = r.v; h.est = l.v + r.v; h.lo = l.lo + r.lo; h.hi = l.hi + r.hi; h.few = l.few || r.few; }
+    // 這次新題不到 10 題的部分不單獨算，改用最近 50 題第一次作答的長期推估（已含這次）；長期也不夠才沿用官方基準
+    const pick = (sec, acc, n) => {
+      const now = calScore(sec, acc, n); if (!now || !now.few) return now && Object.assign(now, { src: "now" });
+      const f = firstAcc(sec), lt = calScore(sec, f.acc, f.n);
+      return Object.assign(lt, { src: lt.few ? "base" : "long", n: f.n });
+    };
+    const l = pick("L", h.accL, fl.length), r = pick("R", h.accR, fr.length);
+    if (l && r) { h.L = l.v; h.R = r.v; h.est = l.v + r.v; h.lo = l.lo + r.lo; h.hi = l.hi + r.hi; h.few = l.src !== "now" || r.src !== "now"; h.src = { L: l.src, R: r.src, nL: l.n, nR: r.n, fL: fl.length, fR: fr.length }; }
     if (s.kind === "diag" && !S.pre) S.pre = { at: Date.now(), lAcc: acc(lIds), rAcc: acc(rIds) };
   }
   s.result = h; S.hist.push(h); S.hist = S.hist.slice(-80); save();
   window.scrollTo(0, 0); render();
+}
+// 結果頁說明分數怎麼來：這次新題夠多就用這次，不夠就用長期推估，長期也不夠才用官方基準
+function srcNote(h) {
+  if (!h.src) return "這次的新題不夠多，分數只能參考官方基準。";
+  const part = sec => { const s = h.src[sec], name = sec === "L" ? "聽力" : "閱讀", f = h.src["f" + sec];
+    return s === "now" ? `${name}用這次 ${f} 題新題計算` : s === "long" ? `${name}這次只有 ${f} 題新題，太少不能單獨算，改用你最近 ${h.src["n" + sec]} 題第一次作答的長期推估` : `${name}累積的第一次作答還不到 10 題，先沿用官方基準`; };
+  return part("L") + "；" + part("R") + "。做過的題目會記得答案，所以不列入估分。";
 }
 function viewResult() {
   const s = session, h = s.result, ids = allQids();
@@ -1561,9 +1575,9 @@ function viewResult() {
   return `<header class="row between"><div><div class="eyebrow">Result · ${esc(s.title)}</div><h1 style="font-size:30px;margin-top:6px">${pct >= 85 ? "表現很穩，繼續保持" : pct >= 60 ? "基礎不錯，弱項還有空間" : "找到要補強的地方了"}</h1></div><div class="row"><button class="btn ghost" data-quityes>回總覽</button><button class="btn print" data-start="smart">接著做今日練習</button></div></header>
   <section class="res-top">
     <div class="card"><div class="eyebrow">${h.est ? "推估成績" : "本回成績"}</div>
-      ${h.est ? `<div class="row" style="align-items:flex-end;gap:14px;margin-top:8px"><div class="big">${h.est}</div><div class="muted" style="padding-bottom:8px">範圍約 ${h.lo}–${h.hi}<br>官方基準 ${S.base.L + S.base.R}</div></div><div class="split"><div><span class="muted" style="font-size:12px">LISTENING</span><br><b>${h.L}</b></div><div><span class="muted" style="font-size:12px">READING</span><br><b>${h.R}</b></div></div>${h.few ? `<p class="muted" style="font-size:13px;margin:8px 0 0">這次的新題不夠多，分數只能參考官方基準。</p>` : ""}`
+      ${h.est ? `<div class="row" style="align-items:flex-end;gap:14px;margin-top:8px"><div class="big">${h.est}</div><div class="muted" style="padding-bottom:8px">範圍約 ${h.lo}–${h.hi}<br>官方基準 ${S.base.L + S.base.R}</div></div><div class="split"><div><span class="muted" style="font-size:12px">LISTENING</span><br><b>${h.L}</b></div><div><span class="muted" style="font-size:12px">READING</span><br><b>${h.R}</b></div></div>${h.few ? `<p class="muted" style="font-size:13px;margin:8px 0 0">${srcNote(h)}</p>` : ""}`
         : h.cal ? `<p class="muted" style="margin:8px 0 0">還沒輸入官方多益成績，所以不換算分數。到總覽頁輸入成績後，之後的測驗會以它為基準推估。</p>` : ""}
-      ${h.cal ? `<p class="muted" style="font-size:13px;margin:8px 0 0">只計算這次之前沒做過的 ${h.nNew} 題：聽力 ${h.accL == null ? "—" : Math.round(h.accL * 100) + "%"}、閱讀 ${h.accR == null ? "—" : Math.round(h.accR * 100) + "%"}。</p>` : ""}
+      ${h.cal ? `<p class="muted" style="font-size:13px;margin:8px 0 0">這次之前沒做過的新題 ${h.nNew} 題：聽力 ${h.accL == null ? "—" : Math.round(h.accL * 100) + "%"}、閱讀 ${h.accR == null ? "—" : Math.round(h.accR * 100) + "%"}。</p>` : ""}
       <p style="margin:14px 0 0">答對 <b class="num">${h.c}</b> / ${h.n} 題（${pct}%）${s.limit ? ` · 用時 ${fmt(Math.floor((h.t - s.start) / 1000))}` : ""}</p>
       ${weak.length ? `<p class="muted" style="margin:6px 0 0">建議優先加強：<b style="color:var(--print)">${weak.join("、")}</b>。今日練習已自動提高這些項目的出題比例。</p>` : ""}
       ${s.kind === "diag" ? `<p class="muted" style="margin:10px 0 0">依目標 ${S.goal} 分，建議每天練 <b class="num">${suggestQ()}</b> 題。可在總覽頁調整每日題數和目標分數。</p>` : ""}</div>
